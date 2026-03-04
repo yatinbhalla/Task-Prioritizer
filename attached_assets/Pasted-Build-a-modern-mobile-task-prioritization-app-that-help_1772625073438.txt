@@ -1,0 +1,154 @@
+Build a modern mobile task prioritization app that helps users decide what to work on next by automatically adjusting task priority based on deadline proximity and urgency.
+The app should feel like a simplified mix of Trello and Todoist, optimized for personal productivity.
+________________________________________
+Platform
+Create a cross platform mobile app (Android) using React Native with Expo.
+Use clean modular architecture and maintainable code.
+Store data locally using local storage.
+________________________________________
+Core Idea
+The app helps users manage tasks by combining:
+•	Manual priority
+•	Deadline proximity
+•	Automatic urgency scoring
+Tasks should become more important automatically as deadlines approach.
+The app should visually guide the user to what must be done next.
+________________________________________
+Task Data Model
+Each task should include:
+•	id
+•	title
+•	optional description
+•	created_date
+•	deadline_date
+•	manual_priority
+•	dynamic_priority
+•	urgency_score
+•	status
+Priority levels:
+Low
+Medium
+High
+Top
+Status values:
+To Do
+In Progress
+Done
+________________________________________
+Smart Priority System
+The app should calculate a dynamic priority using deadline proximity.
+Example rules:
+If deadline > 7 days
+→ use manual priority
+If deadline ≤ 5 days
+→ increase priority by one level
+If deadline ≤ 2 days
+→ increase priority by two levels
+If deadline ≤ 24 hours
+→ automatically set priority to Top
+If overdue
+→ mark as Critical
+Priority escalation order:
+Low → Medium → High → Top → Critical
+This calculation should refresh every time the app opens and once per day.
+________________________________________
+Urgency Score
+Calculate a numeric urgency score so tasks can be sorted intelligently.
+Example formula:
+urgency_score =
+(priority_weight × manual_priority)
++
+(deadline_weight × days_remaining_inverse)
+Where:
+Low = 1
+Medium = 2
+High = 3
+Top = 4
+Critical = 5
+Tasks with higher urgency score appear first.
+________________________________________
+Main Interface
+Use a Kanban style layout with three sections:
+To Do
+In Progress
+Done
+Tasks should be shown as cards.
+Users should be able to:
+Drag cards between columns
+or change status using buttons.
+________________________________________
+Task Card UI
+Each card should display:
+Task title
+Priority badge
+Days remaining
+Deadline date
+Status indicator
+Color code priorities:
+Low → Grey
+Medium → Blue
+High → Orange
+Top → Red
+Critical → Dark Red
+If task is overdue show:
+Overdue badge
+________________________________________
+Sorting
+Inside each column tasks should automatically sort by:
+1.	Urgency score
+2.	Nearest deadline
+________________________________________
+Dashboard Screen
+Create a simple productivity dashboard showing:
+Tasks due today
+Overdue tasks
+High priority tasks
+Total tasks
+Also display:
+“Recommended Next Task”
+This should be the task with the highest urgency score.
+________________________________________
+Task Creation Screen
+Users should be able to:
+Add task title
+Add description
+Choose manual priority
+Set deadline
+Save task
+Include validation for missing fields.
+________________________________________
+Notifications
+Implement local notifications for:
+Task due tomorrow
+Task due today
+Task becoming Top priority
+Task overdue
+________________________________________
+UX Requirements
+Design should be:
+Minimal
+Modern
+Fast
+Card based
+Include:
+Floating add button
+Smooth animations
+Swipe gestures
+Simple edit screen
+Support dark mode.
+________________________________________
+Extra Smart Features
+If possible include:
+Quick add task
+Search tasks
+Filter by priority
+Filter by deadline
+Daily productivity summary
+________________________________________
+Deliverables
+Generate:
+Complete mobile app
+Clean UI
+Working priority logic
+Local database
+Ready to run with Expo
