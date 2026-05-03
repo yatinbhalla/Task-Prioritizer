@@ -4,8 +4,6 @@
 
 PriorityPulse is a cross-platform mobile task prioritization app built with React Native and Expo. It helps users decide what to work on next by automatically adjusting task priority based on deadline proximity and urgency scoring.
 
-The app combines manual priority settings with automatic deadline-based escalation: tasks become more urgent as their deadlines approach, visually guiding users toward what needs attention first.
-
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
@@ -19,13 +17,23 @@ Preferred communication style: Simple, everyday language.
   - ≤24 hours: Force Top priority
   - Overdue: Mark Critical
 - **Urgency Scoring**: Numeric score combining priority weight and deadline proximity for intelligent sorting
+- **Recurring Tasks**: Tasks auto-spawn the next cycle when marked Done
+  - Daily: spawns next day at midnight
+  - Weekly: spawns on chosen weekday
+  - Monthly: spawns on chosen day of month
+  - Custom: spawns every N days
+  - Repeat icon badge on task cards for recurring tasks
 - **Dashboard**: Stats overview (total, due today, overdue, high priority) + recommended next task
 - **Kanban Board**: Three-column view (To Do, In Progress, Done) with tab selector
-- **Task Cards**: Priority badge, days remaining, deadline, color-coded by priority level
+  - Filter chips: Date (All / Today / Tomorrow / This Week / Overdue)
+  - Sort chips: Priority / Deadline / Recently Created
+  - Priority filter: All / Low / Medium / High / Top / Critical
+  - "Clear filters" button when filters are active
+- **Task Cards**: Priority badge, days remaining, deadline, color-coded, recurring icon
 - **Search & Filter**: Text search + filter chips by priority, status, deadline
-- **Add/Edit Tasks**: Full form with title, description, priority picker, status, deadline with quick date options
+- **Add/Edit Tasks**: Full form with title, description, priority, status, deadline, recurrence
 - **Dark Mode**: Full dark/light theme support
-- **Local Storage**: All data persisted via AsyncStorage
+- **Local Storage**: All data persisted via AsyncStorage (with migration for old tasks)
 
 ## Architecture
 
@@ -34,28 +42,49 @@ Preferred communication style: Simple, everyday language.
 - State: React Context + AsyncStorage (no backend needed)
 - Navigation: Three-tab layout (Dashboard, Board, Search) + modal stack for task forms
 
+### Backend (Express + TypeScript)
+- Port 5000 — proxies all Expo/Metro requests to Metro bundler on port 8081
+- Serves landing page at `/` (non-Metro requests)
+- Pre-warms Android + iOS bundles on startup for fast Expo Go loading (~100ms vs 21s cold)
+- Key proxy routes: `/status`, `/assets/?unstable_path=...`, `/symbolicate`, `*.bundle`, `*.map`
+
 ### File Structure
 ```
 app/
-  _layout.tsx          # Root layout with providers (TaskProvider, QueryClient, etc.)
+  _layout.tsx          # Root layout with providers
   (tabs)/
-    _layout.tsx        # Tab bar (NativeTabs for iOS 26+ liquid glass, Tabs fallback)
+    _layout.tsx        # Tab bar
     index.tsx          # Dashboard screen
-    board.tsx          # Kanban board screen
+    board.tsx          # Kanban board with filters/sort
     search.tsx         # Search & filter screen
   task/
-    new.tsx            # New task form (modal)
-    [id].tsx           # Task detail/edit (modal)
+    new.tsx            # New task form
+    [id].tsx           # Task detail/edit
 
 contexts/
-  TaskContext.tsx      # Task state management + CRUD with AsyncStorage
+  TaskContext.tsx      # Task CRUD + recurring task auto-spawn logic
 
 utils/
-  priority.ts         # Priority calculation engine + utilities
+  priority.ts         # Priority engine, recurrence types, computeNextDeadline
 
 components/
   PriorityBadge.tsx   # Color-coded priority badge
-  TaskCard.tsx        # Task card with actions
+  TaskCard.tsx        # Task card (shows repeat icon for recurring tasks)
+  RecurrenceSection.tsx  # Shared recurrence picker UI (used in new + edit)
+  KeyboardAwareScrollViewCompat.tsx
+```
+
+### Task Model
+```typescript
+interface Task {
+  id, title, description, createdDate, deadlineDate,
+  manualPriority, dynamicPriority, urgencyScore, status,
+  recurrenceType: "none" | "daily" | "weekly" | "monthly" | "custom",
+  recurrenceInterval?,   // custom: days between cycles
+  recurrenceDayOfWeek?,  // weekly: 0-6
+  recurrenceDayOfMonth?, // monthly: 1-31
+  nextCycleStart?,
+}
 ```
 
 ### Priority Color Coding
@@ -72,6 +101,7 @@ components/
 
 ## Running the App
 
-- **Backend**: Runs on port 5000 (Express server for landing page only)
-- **Frontend**: Expo Metro on port 8081 — access via Expo Go QR code or web browser at localhost:8081
-- The "Start Frontend" workflow may show as failed due to health check timing, but Metro IS running and accessible
+- **Backend**: Port 5000 (Express + Metro proxy)
+- **Frontend**: Expo Metro on port 8081
+- Scan the QR code in the Replit URL bar with Expo Go (Android) to preview on device
+- Pre-warm: bundles are compiled on backend startup so Expo Go loads in ~100ms

@@ -4,11 +4,13 @@ import {
   Task,
   TaskStatus,
   PriorityLevel,
+  RecurrenceType,
   generateId,
   calculateDynamicPriority,
   calculateUrgencyScore,
   refreshTaskPriorities,
   getDaysRemaining,
+  computeNextDeadline,
 } from "@/utils/priority";
 
 const STORAGE_KEY = "priority_pulse_tasks";
@@ -116,9 +118,37 @@ export function TaskProvider({ children }: { children: ReactNode }) {
 
   const moveTask = useCallback(
     (id: string, status: TaskStatus) => {
-      updateTask(id, { status });
+      setTasks((prev) => {
+        const task = prev.find((t) => t.id === id);
+        if (!task) return prev;
+
+        const updatedTask = { ...task, status };
+        let updated = prev.map((t) => (t.id === id ? updatedTask : t));
+
+        if (status === "done" && task.recurrenceType !== "none") {
+          const nextDeadline = computeNextDeadline(task);
+          const nextCycleStart = nextDeadline;
+          const dynamicPriority = calculateDynamicPriority({ ...task, deadlineDate: nextDeadline });
+          const urgencyScore = calculateUrgencyScore({ ...task, deadlineDate: nextDeadline, dynamicPriority });
+
+          const nextTask: Task = {
+            ...task,
+            id: generateId(),
+            createdDate: new Date().toISOString(),
+            status: "todo",
+            deadlineDate: nextDeadline,
+            nextCycleStart,
+            dynamicPriority,
+            urgencyScore,
+          };
+          updated = [...updated, nextTask];
+        }
+
+        saveTasks(updated);
+        return updated;
+      });
     },
-    [updateTask]
+    [saveTasks]
   );
 
   const getTasksByStatus = useCallback(

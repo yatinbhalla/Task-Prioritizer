@@ -1,0 +1,209 @@
+Feature Update Prompt for Existing Task App
+
+Update the existing task prioritization mobile app by adding recurring tasks and advanced filtering.
+Modify the current codebase rather than creating a new project.
+
+1. Recurring Tasks Feature
+
+Add support for tasks that repeat automatically after completion.
+
+New Task Field
+
+Add a new field in the task model:
+
+recurrence_type
+
+Possible values:
+
+none
+daily
+weekly
+monthly
+custom
+
+Additional fields:
+
+recurrence_interval (number)
+recurrence_day_of_week (0–6)
+recurrence_day_of_month (1–31)
+next_cycle_start
+
+Example data model update:
+
+recurrence_type
+recurrence_interval
+recurrence_day_of_week
+recurrence_day_of_month
+next_cycle_start
+2. Recurring Logic
+
+When a recurring task is marked Done, the system should automatically create the next cycle.
+
+The new task should:
+
+move back to To Do
+keep the same task title and settings
+reset status
+update deadline
+
+Rules:
+
+Daily Task
+
+If recurrence_type = daily
+
+New cycle starts every day at 00:00
+
+Example:
+Complete task today → new task appears tomorrow at 00:00.
+
+Weekly Task
+
+If recurrence_type = weekly
+
+User selects a weekday (example Sunday).
+
+New cycle starts at 00:00 on that day.
+
+Example:
+
+Weekly review
+Completed Sunday → next task appears next Sunday 00:00.
+
+Monthly Task
+
+If recurrence_type = monthly
+
+User selects a day of month.
+
+Example:
+
+Pay bills
+If set to 1st → new task appears every 1st at 00:00.
+
+Custom Recurrence
+
+Allow user to define:
+
+Repeat every X days
+
+Example:
+
+Every 3 days
+Every 10 days
+
+3. Recurring Task UI
+
+When creating or editing a task add:
+
+Repeat options dropdown:
+
+No repeat
+Daily
+Weekly
+Monthly
+Custom
+
+Additional UI fields should appear dynamically.
+
+Examples:
+
+Weekly → choose weekday
+Monthly → choose day of month
+Custom → enter number of days
+
+Recurring tasks should show a repeat icon on the task card.
+
+4. To Do List Filters
+
+Add filters at the top of the To Do screen.
+
+Filters should allow the user to sort or show tasks by:
+
+Date
+Priority
+Urgency
+Deadline
+
+5. Date Filters
+
+Add quick filters:
+
+Today
+Tomorrow
+This Week
+Overdue
+All
+
+Example behavior:
+
+Today → show tasks due today
+Overdue → show missed tasks
+
+6. Priority Filters
+
+Allow filtering tasks by:
+
+Low
+Medium
+High
+Top
+Critical
+
+Users should also be able to view:
+
+High Priority Only
+
+7. Sorting Options
+
+Add sorting options:
+
+Priority (highest first)
+Nearest deadline
+Recently created
+
+Sorting should work together with filters.
+
+8. UI Design
+
+Filters should appear as:
+
+Horizontal filter chips above the task list.
+
+Example:
+
+Today | Week | Overdue | Priority | All
+
+Ensure UI remains clean and mobile friendly.
+
+9. Notifications Update
+
+Recurring tasks should trigger notifications each cycle.
+
+Example:
+
+Daily task → notification every day
+Weekly task → notification on scheduled day.
+
+10. Data Handling
+
+Recurring tasks should not duplicate infinitely.
+
+Instead:
+
+When a recurring task is completed:
+
+mark current instance done
+generate the next instance
+update next_cycle_start
+11. Deliverables
+
+Update the existing code to include:
+
+Recurring task logic
+Recurring UI controls
+Filtering system
+Sorting system
+Database updates
+
+Ensure the app continues working smoothly with current features.

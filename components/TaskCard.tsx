@@ -28,6 +28,7 @@ export function TaskCard({ task, showMoveButtons = true }: Props) {
   const theme = isDark ? AppColors.dark : AppColors.light;
   const { moveTask, deleteTask } = useTasks();
   const overdue = isOverdue(task.deadlineDate) && task.status !== "done";
+  const isRecurring = task.recurrenceType && task.recurrenceType !== "none";
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const currentIdx = STATUS_ORDER.indexOf(task.status);
@@ -74,6 +75,11 @@ export function TaskCard({ task, showMoveButtons = true }: Props) {
             {overdue && (
               <View style={styles.overdueBadge}>
                 <Text style={styles.overdueText}>Overdue</Text>
+              </View>
+            )}
+            {isRecurring && (
+              <View style={[styles.recurBadge, { backgroundColor: AppColors.primary + "15" }]}>
+                <Ionicons name="repeat" size={10} color={AppColors.primary} />
               </View>
             )}
           </View>
@@ -173,6 +179,13 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: AppColors.priority.critical,
     fontFamily: "Inter_600SemiBold",
+  },
+  recurBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
   },
   deleteBtn: {
     padding: 4,

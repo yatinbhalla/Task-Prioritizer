@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   ScrollView,
   StyleSheet,
@@ -16,7 +16,11 @@ import * as Haptics from "expo-haptics";
 import { AppColors } from "@/constants/colors";
 import { useTasks } from "@/contexts/TaskContext";
 import { TaskCard } from "@/components/TaskCard";
-import { TaskStatus, STATUS_LABELS } from "@/utils/priority";
+import { Task, TaskStatus, PriorityLevel, STATUS_LABELS, getDaysRemaining, PRIORITY_LABELS } from "@/utils/priority";
+
+type DateFilter = "all" | "today" | "tomorrow" | "thisweek" | "overdue";
+type SortMode = "priority" | "deadline" | "created";
+type PriorityFilter = "all" | PriorityLevel;
 
 const COLUMNS: { status: TaskStatus; icon: keyof typeof Ionicons.glyphMap }[] = [
   { status: "todo", icon: "list-outline" },
@@ -24,31 +28,80 @@ const COLUMNS: { status: TaskStatus; icon: keyof typeof Ionicons.glyphMap }[] = 
   { status: "done", icon: "checkmark-circle-outline" },
 ];
 
-function ColumnHeader({
-  status,
-  count,
-  isDark,
-  icon,
-}: {
-  status: TaskStatus;
-  count: number;
-  isDark: boolean;
-  icon: keyof typeof Ionicons.glyphMap;
-}) {
-  const theme = isDark ? AppColors.dark : AppColors.light;
-  const statusColor = AppColors.status[status];
+const DATE_FILTERS: { key: DateFilter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "today", label: "Today" },
+  { key: "tomorrow", label: "Tomorrow" },
+  { key: "thisweek", label: "This Week" },
+  { key: "overdue", label: "Overdue" },
+];
 
-  return (
-    <View style={[styles.columnHeader, { borderBottomColor: statusColor }]}>
-      <View style={styles.columnHeaderLeft}>
-        <Ionicons name={icon} size={16} color={statusColor} />
-        <Text style={[styles.columnTitle, { color: theme.text }]}>{STATUS_LABELS[status]}</Text>
-      </View>
-      <View style={[styles.countBadge, { backgroundColor: statusColor + "20" }]}>
-        <Text style={[styles.countText, { color: statusColor }]}>{count}</Text>
-      </View>
-    </View>
-  );
+const SORT_OPTIONS: { key: SortMode; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { key: "priority", label: "Priority", icon: "flame-outline" },
+  { key: "deadline", label: "Deadline", icon: "time-outline" },
+  { key: "created", label: "Recent", icon: "add-circle-outline" },
+];
+
+const PRIORITY_FILTERS: { key: PriorityFilter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "low", label: "Low" },
+  { key: "medium", label: "Medium" },
+  { key: "high", label: "High" },
+  { key: "top", label: "Top" },
+  { key: "critical", label: "Critical" },
+];
+
+function applyFiltersAndSort(
+  tasks: Task[],
+  dateFilter: DateFilter,
+  priorityFilter: PriorityFilter,
+  sortMode: SortMode
+): Task[] {
+  const now = new Date();
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date(now);
+  todayEnd.setHours(23, 59, 59, 999);
+  const tomorrowStart = new Date(todayStart);
+  tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+  const tomorrowEnd = new Date(tomorrowStart);
+  tomorrowEnd.setHours(23, 59, 59, 999);
+  const weekEnd = new Date(todayStart);
+  weekEnd.setDate(weekEnd.getDate() + 7);
+  weekEnd.setHours(23, 59, 59, 999);
+
+  let filtered = tasks.filter((t) => {
+    const d = new Date(t.deadlineDate);
+    switch (dateFilter) {
+      case "today":
+        return d >= todayStart && d <= todayEnd;
+      case "tomorrow":
+        return d >= tomorrowStart && d <= tomorrowEnd;
+      case "thisweek":
+        return d >= todayStart && d <= weekEnd;
+      case "overdue":
+        return getDaysRemaining(t.deadlineDate) < 0;
+      default:
+        return true;
+    }
+  });
+
+  if (priorityFilter !== "all") {
+    filtered = filtered.filter((t) => t.dynamicPriority === priorityFilter);
+  }
+
+  return filtered.sort((a, b) => {
+    switch (sortMode) {
+      case "deadline":
+        return getDaysRemaining(a.deadlineDate) - getDaysRemaining(b.deadlineDate);
+      case "created":
+        return new Date(b.createdDate).getTime() - new Date(a.createdDate).getTime();
+      case "priority":
+      default:
+        if (b.urgencyScore !== a.urgencyScore) return b.urgencyScore - a.urgencyScore;
+        return getDaysRemaining(a.deadlineDate) - getDaysRemaining(b.deadlineDate);
+    }
+  });
 }
 
 export default function BoardScreen() {
@@ -59,6 +112,11 @@ export default function BoardScreen() {
   const { getTasksByStatus, isLoading } = useTasks();
   const [activeColumn, setActiveColumn] = useState<TaskStatus>("todo");
 
+  const [dateFilter, setDateFilter] = useState<DateFilter>("all");
+  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("all");
+  const [sortMode, setSortMode] = useState<SortMode>("priority");
+  const [showPriorityFilters, setShowPriorityFilters] = useState(false);
+
   const topInset = Platform.OS === "web" ? 67 : insets.top;
   const bottomInset = Platform.OS === "web" ? 34 : 0;
 
@@ -67,6 +125,38 @@ export default function BoardScreen() {
     router.push("/task/new");
   };
 
+  const rawTodo = getTasksByStatus("todo");
+  const rawInprogress = getTasksByStatus("inprogress");
+  const rawDone = getTasksByStatus("done");
+
+  const filteredTodo = useMemo(
+    () => applyFiltersAndSort(rawTodo, dateFilter, priorityFilter, sortMode),
+    [rawTodo, dateFilter, priorityFilter, sortMode]
+  );
+  const filteredInprogress = useMemo(
+    () => applyFiltersAndSort(rawInprogress, dateFilter, priorityFilter, sortMode),
+    [rawInprogress, dateFilter, priorityFilter, sortMode]
+  );
+  const filteredDone = useMemo(
+    () => applyFiltersAndSort(rawDone, dateFilter, priorityFilter, sortMode),
+    [rawDone, dateFilter, priorityFilter, sortMode]
+  );
+
+  const colData: Record<TaskStatus, Task[]> = {
+    todo: filteredTodo,
+    inprogress: filteredInprogress,
+    done: filteredDone,
+  };
+
+  const rawColData: Record<TaskStatus, Task[]> = {
+    todo: rawTodo,
+    inprogress: rawInprogress,
+    done: rawDone,
+  };
+
+  const hasActiveFilters =
+    dateFilter !== "all" || priorityFilter !== "all" || sortMode !== "priority";
+
   if (isLoading) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: theme.bg }]}>
@@ -74,15 +164,6 @@ export default function BoardScreen() {
       </View>
     );
   }
-
-  const todoCols = getTasksByStatus("todo");
-  const inprogressCols = getTasksByStatus("inprogress");
-  const doneCols = getTasksByStatus("done");
-  const colData: Record<TaskStatus, ReturnType<typeof getTasksByStatus>> = {
-    todo: todoCols,
-    inprogress: inprogressCols,
-    done: doneCols,
-  };
 
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
@@ -132,12 +213,179 @@ export default function BoardScreen() {
                     { color: isActive ? statusColor : theme.textSecondary },
                   ]}
                 >
-                  {colData[status].length}
+                  {rawColData[status].length}
                 </Text>
               </View>
             </Pressable>
           );
         })}
+      </View>
+
+      <View style={[styles.filterBar, { borderBottomColor: theme.border }]}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterRow}
+        >
+          {DATE_FILTERS.map((f) => {
+            const isActive = dateFilter === f.key;
+            return (
+              <Pressable
+                key={f.key}
+                onPress={async () => {
+                  await Haptics.selectionAsync();
+                  setDateFilter(f.key);
+                }}
+                style={[
+                  styles.filterChip,
+                  {
+                    backgroundColor: isActive ? AppColors.primary + "20" : theme.bgCard,
+                    borderColor: isActive ? AppColors.primary : theme.border,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    {
+                      color: isActive ? AppColors.primary : theme.textSecondary,
+                      fontFamily: isActive ? "Inter_600SemiBold" : "Inter_400Regular",
+                    },
+                  ]}
+                >
+                  {f.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+
+          <View style={[styles.divider, { backgroundColor: theme.border }]} />
+
+          {SORT_OPTIONS.map((s) => {
+            const isActive = sortMode === s.key;
+            return (
+              <Pressable
+                key={s.key}
+                onPress={async () => {
+                  await Haptics.selectionAsync();
+                  setSortMode(s.key);
+                }}
+                style={[
+                  styles.filterChip,
+                  {
+                    backgroundColor: isActive ? "#6B7280" + "20" : theme.bgCard,
+                    borderColor: isActive ? "#6B7280" : theme.border,
+                  },
+                ]}
+              >
+                <Ionicons
+                  name={s.icon}
+                  size={11}
+                  color={isActive ? "#6B7280" : theme.textSecondary}
+                />
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    {
+                      color: isActive ? "#6B7280" : theme.textSecondary,
+                      fontFamily: isActive ? "Inter_600SemiBold" : "Inter_400Regular",
+                    },
+                  ]}
+                >
+                  {s.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+
+          <View style={[styles.divider, { backgroundColor: theme.border }]} />
+
+          <Pressable
+            onPress={async () => {
+              await Haptics.selectionAsync();
+              setShowPriorityFilters((v) => !v);
+            }}
+            style={[
+              styles.filterChip,
+              {
+                backgroundColor: priorityFilter !== "all"
+                  ? AppColors.priority[priorityFilter as PriorityLevel] + "20"
+                  : theme.bgCard,
+                borderColor: priorityFilter !== "all"
+                  ? AppColors.priority[priorityFilter as PriorityLevel]
+                  : theme.border,
+              },
+            ]}
+          >
+            <Ionicons
+              name="funnel-outline"
+              size={11}
+              color={
+                priorityFilter !== "all"
+                  ? AppColors.priority[priorityFilter as PriorityLevel]
+                  : theme.textSecondary
+              }
+            />
+            <Text
+              style={[
+                styles.filterChipText,
+                {
+                  color: priorityFilter !== "all"
+                    ? AppColors.priority[priorityFilter as PriorityLevel]
+                    : theme.textSecondary,
+                  fontFamily: priorityFilter !== "all" ? "Inter_600SemiBold" : "Inter_400Regular",
+                },
+              ]}
+            >
+              {priorityFilter === "all" ? "Priority" : PRIORITY_LABELS[priorityFilter as PriorityLevel]}
+            </Text>
+          </Pressable>
+        </ScrollView>
+
+        {showPriorityFilters && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={[styles.filterRow, styles.priorityFilterRow]}
+          >
+            {PRIORITY_FILTERS.map((p) => {
+              const isActive = priorityFilter === p.key;
+              const color = p.key === "all" ? "#6B7280" : AppColors.priority[p.key as PriorityLevel];
+              return (
+                <Pressable
+                  key={p.key}
+                  onPress={async () => {
+                    await Haptics.selectionAsync();
+                    setPriorityFilter(p.key);
+                    setShowPriorityFilters(false);
+                  }}
+                  style={[
+                    styles.filterChip,
+                    {
+                      backgroundColor: isActive ? color + "20" : theme.bgCard,
+                      borderColor: isActive ? color : theme.border,
+                    },
+                  ]}
+                >
+                  {p.key !== "all" && (
+                    <View style={[styles.priorityDot, { backgroundColor: color }]} />
+                  )}
+                  <Text
+                    style={[
+                      styles.filterChipText,
+                      {
+                        color: isActive ? color : theme.textSecondary,
+                        fontFamily: isActive ? "Inter_600SemiBold" : "Inter_400Regular",
+                      },
+                    ]}
+                  >
+                    {p.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        )}
       </View>
 
       <ScrollView
@@ -154,14 +402,30 @@ export default function BoardScreen() {
               size={48}
               color={theme.textSecondary}
             />
-            <Text style={[styles.emptyTitle, { color: theme.text }]}>No tasks here</Text>
+            <Text style={[styles.emptyTitle, { color: theme.text }]}>
+              {hasActiveFilters ? "No matching tasks" : "No tasks here"}
+            </Text>
             <Text style={[styles.emptySubtitle, { color: theme.textSecondary }]}>
-              {activeColumn === "todo"
+              {hasActiveFilters
+                ? "Try adjusting your filters"
+                : activeColumn === "todo"
                 ? "Add a task to get started"
                 : activeColumn === "inprogress"
                 ? "Move tasks here when you start working"
                 : "Complete tasks to see them here"}
             </Text>
+            {hasActiveFilters && (
+              <Pressable
+                onPress={() => {
+                  setDateFilter("all");
+                  setPriorityFilter("all");
+                  setSortMode("priority");
+                }}
+                style={styles.clearFiltersBtn}
+              >
+                <Text style={styles.clearFiltersText}>Clear filters</Text>
+              </Pressable>
+            )}
           </View>
         ) : (
           colData[activeColumn].map((task) => (
@@ -210,7 +474,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     paddingHorizontal: 20,
     gap: 4,
-    marginBottom: 16,
+    marginBottom: 0,
   },
   columnTab: {
     flex: 1,
@@ -235,38 +499,44 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: "Inter_600SemiBold",
   },
-  columnHeader: {
+  filterBar: {
+    borderBottomWidth: 1,
+    paddingVertical: 10,
+  },
+  filterRow: {
+    paddingHorizontal: 16,
+    gap: 7,
+    alignItems: "center",
     flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingBottom: 10,
-    marginBottom: 12,
-    borderBottomWidth: 2,
   },
-  columnHeaderLeft: {
+  priorityFilterRow: {
+    paddingTop: 8,
+  },
+  filterChip: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 5,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
   },
-  columnTitle: {
-    fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
-  },
-  countBadge: {
-    minWidth: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 6,
-  },
-  countText: {
+  filterChipText: {
     fontSize: 12,
-    fontFamily: "Inter_700Bold",
+  },
+  divider: {
+    width: 1,
+    height: 16,
+    marginHorizontal: 2,
+  },
+  priorityDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
   },
   scrollContent: {
     paddingHorizontal: 20,
-    paddingTop: 4,
+    paddingTop: 12,
   },
   emptyState: {
     alignItems: "center",
@@ -283,6 +553,20 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 18,
     maxWidth: 240,
+  },
+  clearFiltersBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: AppColors.primary + "20",
+    borderWidth: 1,
+    borderColor: AppColors.primary,
+    marginTop: 4,
+  },
+  clearFiltersText: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+    color: AppColors.primary,
   },
   fab: {
     position: "absolute",

@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import {
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -17,7 +16,8 @@ import * as Haptics from "expo-haptics";
 import { KeyboardAwareScrollViewCompat as KeyboardAwareScrollView } from "@/components/KeyboardAwareScrollViewCompat";
 import { AppColors } from "@/constants/colors";
 import { useTasks } from "@/contexts/TaskContext";
-import { PriorityLevel, TaskStatus, PRIORITY_LABELS, STATUS_LABELS } from "@/utils/priority";
+import { PriorityLevel, TaskStatus, PRIORITY_LABELS, STATUS_LABELS, RecurrenceType } from "@/utils/priority";
+import { RecurrenceSection } from "@/components/RecurrenceSection";
 
 const PRIORITIES: PriorityLevel[] = ["low", "medium", "high", "top"];
 const STATUSES: TaskStatus[] = ["todo", "inprogress", "done"];
@@ -42,6 +42,11 @@ export default function NewTaskScreen() {
   const [status, setStatus] = useState<TaskStatus>("todo");
   const [deadlineDate, setDeadlineDate] = useState(addDays(today, 7));
   const [dateInput, setDateInput] = useState(addDays(today, 7));
+
+  const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>("none");
+  const [recurrenceInterval, setRecurrenceInterval] = useState(1);
+  const [recurrenceDayOfWeek, setRecurrenceDayOfWeek] = useState(0);
+  const [recurrenceDayOfMonth, setRecurrenceDayOfMonth] = useState(1);
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
   const bottomInset = Platform.OS === "web" ? 34 : insets.bottom;
@@ -71,6 +76,10 @@ export default function NewTaskScreen() {
       manualPriority: priority,
       deadlineDate: new Date(deadlineDate + "T12:00:00").toISOString(),
       status,
+      recurrenceType,
+      recurrenceInterval,
+      recurrenceDayOfWeek,
+      recurrenceDayOfMonth,
     });
     router.back();
   };
@@ -251,6 +260,21 @@ export default function NewTaskScreen() {
           <Text style={[styles.dateHint, { color: theme.textSecondary }]}>
             Enter date as YYYY-MM-DD or tap a quick option above
           </Text>
+        </View>
+
+        <View style={styles.formSection}>
+          <RecurrenceSection
+            recurrenceType={recurrenceType}
+            recurrenceInterval={recurrenceInterval}
+            recurrenceDayOfWeek={recurrenceDayOfWeek}
+            recurrenceDayOfMonth={recurrenceDayOfMonth}
+            onChange={(updates) => {
+              if (updates.recurrenceType !== undefined) setRecurrenceType(updates.recurrenceType);
+              if (updates.recurrenceInterval !== undefined) setRecurrenceInterval(updates.recurrenceInterval);
+              if (updates.recurrenceDayOfWeek !== undefined) setRecurrenceDayOfWeek(updates.recurrenceDayOfWeek);
+              if (updates.recurrenceDayOfMonth !== undefined) setRecurrenceDayOfMonth(updates.recurrenceDayOfMonth);
+            }}
+          />
         </View>
 
         <Pressable

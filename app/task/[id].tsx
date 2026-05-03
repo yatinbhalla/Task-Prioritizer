@@ -18,14 +18,17 @@ import { KeyboardAwareScrollViewCompat as KeyboardAwareScrollView } from "@/comp
 import { AppColors } from "@/constants/colors";
 import { useTasks } from "@/contexts/TaskContext";
 import { PriorityBadge } from "@/components/PriorityBadge";
+import { RecurrenceSection } from "@/components/RecurrenceSection";
 import {
   PriorityLevel,
   TaskStatus,
+  RecurrenceType,
   PRIORITY_LABELS,
   STATUS_LABELS,
   formatDaysRemaining,
   formatDeadline,
   isOverdue,
+  describeRecurrence,
 } from "@/utils/priority";
 
 const PRIORITIES: PriorityLevel[] = ["low", "medium", "high", "top"];
@@ -62,6 +65,11 @@ export default function TaskDetailScreen() {
     task ? new Date(task.deadlineDate).toISOString().split("T")[0] : addDays(new Date(), 7)
   );
 
+  const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>(task?.recurrenceType ?? "none");
+  const [recurrenceInterval, setRecurrenceInterval] = useState(task?.recurrenceInterval ?? 1);
+  const [recurrenceDayOfWeek, setRecurrenceDayOfWeek] = useState(task?.recurrenceDayOfWeek ?? 0);
+  const [recurrenceDayOfMonth, setRecurrenceDayOfMonth] = useState(task?.recurrenceDayOfMonth ?? 1);
+
   if (!task) {
     return (
       <View style={[styles.container, { backgroundColor: theme.bg }]}>
@@ -79,6 +87,7 @@ export default function TaskDetailScreen() {
   }
 
   const overdue = isOverdue(task.deadlineDate) && task.status !== "done";
+  const isRecurring = task.recurrenceType && task.recurrenceType !== "none";
 
   const today = new Date();
   const QUICK_DATES = [
@@ -101,6 +110,10 @@ export default function TaskDetailScreen() {
       manualPriority: priority,
       status,
       deadlineDate: new Date(deadlineDate + "T12:00:00").toISOString(),
+      recurrenceType,
+      recurrenceInterval,
+      recurrenceDayOfWeek,
+      recurrenceDayOfMonth,
     });
     setIsEditing(false);
   };
@@ -132,10 +145,7 @@ export default function TaskDetailScreen() {
     return (
       <View style={[styles.container, { backgroundColor: theme.bg }]}>
         <View style={[styles.header, { paddingTop: topInset + 12 }]}>
-          <Pressable
-            onPress={() => setIsEditing(false)}
-            style={styles.closeBtn}
-          >
+          <Pressable onPress={() => setIsEditing(false)} style={styles.closeBtn}>
             <Ionicons name="close" size={22} color={theme.text} />
           </Pressable>
           <Text style={[styles.headerTitle, { color: theme.text }]}>Edit Task</Text>
@@ -290,6 +300,21 @@ export default function TaskDetailScreen() {
             </View>
           </View>
 
+          <View style={styles.formSection}>
+            <RecurrenceSection
+              recurrenceType={recurrenceType}
+              recurrenceInterval={recurrenceInterval}
+              recurrenceDayOfWeek={recurrenceDayOfWeek}
+              recurrenceDayOfMonth={recurrenceDayOfMonth}
+              onChange={(updates) => {
+                if (updates.recurrenceType !== undefined) setRecurrenceType(updates.recurrenceType);
+                if (updates.recurrenceInterval !== undefined) setRecurrenceInterval(updates.recurrenceInterval);
+                if (updates.recurrenceDayOfWeek !== undefined) setRecurrenceDayOfWeek(updates.recurrenceDayOfWeek);
+                if (updates.recurrenceDayOfMonth !== undefined) setRecurrenceDayOfMonth(updates.recurrenceDayOfMonth);
+              }}
+            />
+          </View>
+
           <Pressable
             onPress={handleSave}
             style={({ pressed }) => [
@@ -335,6 +360,12 @@ export default function TaskDetailScreen() {
             <View style={styles.overdueBadge}>
               <Ionicons name="alert-circle" size={12} color={AppColors.priority.critical} />
               <Text style={styles.overdueText}>Overdue</Text>
+            </View>
+          )}
+          {isRecurring && (
+            <View style={[styles.recurBadge, { backgroundColor: AppColors.primary + "15", borderColor: AppColors.primary + "30" }]}>
+              <Ionicons name="repeat" size={11} color={AppColors.primary} />
+              <Text style={[styles.recurText, { color: AppColors.primary }]}>Recurring</Text>
             </View>
           )}
           <View
@@ -390,6 +421,20 @@ export default function TaskDetailScreen() {
               {task.urgencyScore.toFixed(2)}
             </Text>
           </View>
+          {isRecurring && (
+            <>
+              <View style={[styles.divider, { backgroundColor: theme.border }]} />
+              <View style={styles.infoRow}>
+                <View style={styles.infoLeft}>
+                  <Ionicons name="repeat" size={16} color={AppColors.primary} />
+                  <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>Recurrence</Text>
+                </View>
+                <Text style={[styles.infoValue, { color: AppColors.primary }]}>
+                  {describeRecurrence(task)}
+                </Text>
+              </View>
+            </>
+          )}
           <View style={[styles.divider, { backgroundColor: theme.border }]} />
           <View style={styles.infoRow}>
             <View style={styles.infoLeft}>
@@ -515,6 +560,19 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_600SemiBold",
     color: AppColors.priority.critical,
   },
+  recurBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  recurText: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+  },
   statusBadge: {
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -560,6 +618,8 @@ const styles = StyleSheet.create({
   infoValue: {
     fontSize: 14,
     fontFamily: "Inter_500Medium",
+    maxWidth: "55%",
+    textAlign: "right",
   },
   divider: {
     height: 1,
