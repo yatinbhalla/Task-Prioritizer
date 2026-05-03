@@ -1,0 +1,167 @@
+🚀 Feature: Focus Mode + Lightweight Login
+
+Update the existing task prioritization app by adding:
+
+Focus Mode (central intelligence layer)
+Simple Login (profile creation only, no heavy auth)
+
+Modify the current codebase, do not rebuild.
+
+🔐 1. Lightweight Login System (Profile Only)
+Goal
+
+Allow users to create a simple profile so their data feels personal, without complex authentication.
+
+Requirements
+Login Options (keep it simple)
+Continue as Guest (default)
+Enter Name (required for profile)
+Optional: Email (no verification needed)
+Data Model
+user_id
+name
+email (optional)
+created_at
+Behavior
+On first app open:
+Show a simple onboarding screen:
+“What should we call you?”
+Store user locally (AsyncStorage / SQLite)
+No passwords
+No OTP
+No external auth
+UI
+Clean welcome screen:
+Input: Name
+Button: “Start Planning”
+Show name in app:
+“Good evening, Yatin”
+“Your plan for today”
+Persistence
+Store user profile locally
+Auto-login on next app open
+🧠 2. Focus Mode (Core Differentiator)
+
+Create a new main feature called:
+
+👉 Focus Mode
+
+This becomes the default home screen.
+
+What Focus Mode Does
+
+It answers 3 questions:
+
+What should I do now?
+What does my day look like?
+What’s urgent?
+Components of Focus Mode
+A. Recommended Next Task
+
+Top section:
+
+👉 “Do this now”
+
+Logic:
+
+highest priority_score
+shortest duration
+closest deadline
+
+Show:
+
+Task title
+Time required
+Priority badge
+
+Buttons:
+
+Start
+Skip
+B. Today Plan (Mini Scheduler)
+
+Auto-generate a simple plan for the day.
+
+Pull tasks from To Do
+Fit into available time (default 6–8 hours)
+
+Show as:
+
+Time blocks OR ordered list
+
+Example:
+
+10:00 – Task A
+11:30 – Task B
+C. Quick Stats
+
+Show:
+
+Tasks due today
+Overdue tasks
+Completed today
+D. Focus Button
+
+Add a CTA:
+
+👉 “Start Focus Session”
+
+When clicked:
+
+Opens selected task
+Minimal UI
+Timer (optional)
+🧮 Focus Mode Logic
+
+Use existing systems:
+
+urgency_score
+priority_score
+deadline
+estimated_duration
+Selection Logic
+Sort tasks by:
+1. priority_score
+2. deadline proximity
+3. shortest duration
+
+Pick top task as “Next Task”
+🎯 3. Navigation Update
+
+Update app structure:
+
+Focus (default home)
+Tasks (Kanban board)
+Add Task
+Profile
+🎨 UI Guidelines
+Minimal
+Clean
+Card-based
+Mobile-first
+
+Focus Mode should feel:
+
+👉 Calm
+👉 Clear
+👉 Action-oriented
+
+🔔 4. Notifications (Update)
+“Your next task is ready”
+“You have 3 tasks due today”
+“Start your Focus Mode”
+📦 Deliverables
+
+Update existing app with:
+
+Login screen (local profile only)
+Focus Mode screen
+Recommendation logic
+Navigation updates
+Persistent user data
+
+Ensure:
+
+No external APIs required
+Works fully offline
+Compatible with current features

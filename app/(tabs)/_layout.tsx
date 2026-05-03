@@ -11,8 +11,8 @@ function NativeTabLayout() {
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
-        <Icon sf={{ default: "square.grid.2x2", selected: "square.grid.2x2.fill" }} />
-        <Label>Dashboard</Label>
+        <Icon sf={{ default: "bolt.circle", selected: "bolt.circle.fill" }} />
+        <Label>Focus</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="board">
         <Icon sf={{ default: "rectangle.3.group", selected: "rectangle.3.group.fill" }} />
@@ -21,6 +21,10 @@ function NativeTabLayout() {
       <NativeTabs.Trigger name="search">
         <Icon sf={{ default: "magnifyingglass", selected: "magnifyingglass" }} />
         <Label>Search</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="profile">
+        <Icon sf={{ default: "person.circle", selected: "person.circle.fill" }} />
+        <Label>Profile</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
@@ -67,9 +71,9 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Dashboard",
+          title: "Focus",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="grid-outline" size={size} color={color} />
+            <Ionicons name="flash" size={size} color={color} />
           ),
         }}
       />
@@ -88,6 +92,15 @@ function ClassicTabLayout() {
           title: "Search",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="search-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: "Profile",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="person-circle-outline" size={size} color={color} />
           ),
         }}
       />

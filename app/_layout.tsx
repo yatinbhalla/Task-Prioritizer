@@ -14,6 +14,7 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { queryClient } from "@/lib/query-client";
 import { TaskProvider } from "@/contexts/TaskContext";
+import { UserProvider } from "@/contexts/UserContext";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -21,20 +22,11 @@ function RootLayoutNav() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen
-        name="task/[id]"
-        options={{
-          presentation: "modal",
-          headerShown: false,
-        }}
-      />
-      <Stack.Screen
-        name="task/new"
-        options={{
-          presentation: "modal",
-          headerShown: false,
-        }}
-      />
+      <Stack.Screen name="onboarding" options={{ headerShown: false, presentation: "fullScreenModal" }} />
+      <Stack.Screen name="planner" options={{ headerShown: false, presentation: "modal" }} />
+      <Stack.Screen name="matrix" options={{ headerShown: false, presentation: "modal" }} />
+      <Stack.Screen name="task/[id]" options={{ presentation: "modal", headerShown: false }} />
+      <Stack.Screen name="task/new" options={{ presentation: "modal", headerShown: false }} />
     </Stack>
   );
 }
@@ -60,9 +52,11 @@ export default function RootLayout() {
       <QueryClientProvider client={queryClient}>
         <GestureHandlerRootView style={{ flex: 1 }}>
           <KeyboardProvider>
-            <TaskProvider>
-              <RootLayoutNav />
-            </TaskProvider>
+            <UserProvider>
+              <TaskProvider>
+                <RootLayoutNav />
+              </TaskProvider>
+            </UserProvider>
           </KeyboardProvider>
         </GestureHandlerRootView>
       </QueryClientProvider>

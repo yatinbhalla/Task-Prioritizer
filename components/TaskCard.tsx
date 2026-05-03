@@ -11,7 +11,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { AppColors } from "@/constants/colors";
-import { Task, formatDaysRemaining, formatDeadline, isOverdue, STATUS_LABELS, TaskStatus } from "@/utils/priority";
+import { Task, formatDaysRemaining, formatDeadline, formatDuration, isOverdue, STATUS_LABELS, TaskStatus } from "@/utils/priority";
 import { PriorityBadge } from "./PriorityBadge";
 import { useTasks } from "@/contexts/TaskContext";
 
@@ -34,6 +34,9 @@ export function TaskCard({ task, showMoveButtons = true }: Props) {
   const currentIdx = STATUS_ORDER.indexOf(task.status);
   const nextStatus = currentIdx < STATUS_ORDER.length - 1 ? STATUS_ORDER[currentIdx + 1] : null;
   const prevStatus = currentIdx > 0 ? STATUS_ORDER[currentIdx - 1] : null;
+
+  const completedSubtasks = (task.subtasks ?? []).filter((s) => s.completed).length;
+  const totalSubtasks = (task.subtasks ?? []).length;
 
   const handlePress = () => {
     Animated.sequence([
@@ -82,6 +85,14 @@ export function TaskCard({ task, showMoveButtons = true }: Props) {
                 <Ionicons name="repeat" size={10} color={AppColors.primary} />
               </View>
             )}
+            {totalSubtasks > 0 && (
+              <View style={[styles.subtaskBadge, { backgroundColor: theme.bgSecondary }]}>
+                <Ionicons name="list" size={10} color={theme.textSecondary} />
+                <Text style={[styles.subtaskBadgeText, { color: theme.textSecondary }]}>
+                  {completedSubtasks}/{totalSubtasks}
+                </Text>
+              </View>
+            )}
           </View>
           <Pressable onPress={handleDelete} hitSlop={8} style={styles.deleteBtn}>
             <Ionicons name="trash-outline" size={14} color={theme.textSecondary} />
@@ -116,9 +127,15 @@ export function TaskCard({ task, showMoveButtons = true }: Props) {
             >
               {days}
             </Text>
-            <Text style={[styles.deadlineSub, { color: theme.textSecondary }]}>
-              · {formatDeadline(task.deadlineDate)}
-            </Text>
+            {task.estimated_duration > 0 && (
+              <>
+                <Text style={[styles.deadlineSep, { color: theme.textSecondary }]}>·</Text>
+                <Ionicons name="hourglass-outline" size={11} color={theme.textSecondary} />
+                <Text style={[styles.deadline, { color: theme.textSecondary }]}>
+                  {formatDuration(task.estimated_duration)}
+                </Text>
+              </>
+            )}
           </View>
 
           {showMoveButtons && (
@@ -187,9 +204,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  deleteBtn: {
-    padding: 4,
+  subtaskBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
   },
+  subtaskBadgeText: {
+    fontSize: 10,
+    fontFamily: "Inter_500Medium",
+  },
+  deleteBtn: { padding: 4 },
   title: {
     fontSize: 14,
     fontFamily: "Inter_600SemiBold",
@@ -212,17 +239,9 @@ const styles = StyleSheet.create({
     gap: 4,
     flex: 1,
   },
-  deadline: {
-    fontSize: 11,
-  },
-  deadlineSub: {
-    fontSize: 11,
-    fontFamily: "Inter_400Regular",
-  },
-  actions: {
-    flexDirection: "row",
-    gap: 6,
-  },
+  deadline: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  deadlineSep: { fontSize: 11 },
+  actions: { flexDirection: "row", gap: 6 },
   actionBtn: {
     width: 26,
     height: 26,

@@ -1,13 +1,7 @@
 import React, { useState } from "react";
 import {
-  StyleSheet,
-  Text,
-  View,
-  TextInput,
-  Pressable,
-  useColorScheme,
-  Platform,
-  Alert,
+  StyleSheet, Text, View, TextInput, Pressable,
+  useColorScheme, Platform, Alert,
 } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -21,12 +15,58 @@ import { RecurrenceSection } from "@/components/RecurrenceSection";
 
 const PRIORITIES: PriorityLevel[] = ["low", "medium", "high", "top"];
 const STATUSES: TaskStatus[] = ["todo", "inprogress", "done"];
+const DURATION_OPTIONS = [
+  { label: "15m", value: 15 },
+  { label: "30m", value: 30 },
+  { label: "45m", value: 45 },
+  { label: "1h", value: 60 },
+  { label: "1.5h", value: 90 },
+  { label: "2h", value: 120 },
+  { label: "3h", value: 180 },
+];
 
 function addDays(date: Date, days: number): string {
   const d = new Date(date);
   d.setDate(d.getDate() + days);
   return d.toISOString().split("T")[0];
 }
+
+function ScorePicker({
+  label, value, onChange, activeColor, theme,
+}: {
+  label: string; value: number; onChange: (v: number) => void;
+  activeColor: string; theme: any;
+}) {
+  return (
+    <View style={sp.row}>
+      <Text style={[sp.label, { color: theme.textSecondary }]}>{label}</Text>
+      <View style={sp.dots}>
+        {[1, 2, 3, 4, 5].map((n) => (
+          <Pressable
+            key={n}
+            onPress={async () => { await Haptics.selectionAsync(); onChange(n); }}
+            style={[sp.dot, { backgroundColor: n <= value ? activeColor : theme.border }]}
+          >
+            <Text style={[sp.dotText, { color: n <= value ? "#fff" : theme.textSecondary }]}>{n}</Text>
+          </Pressable>
+        ))}
+      </View>
+      <Text style={[sp.score, { color: activeColor }]}>{value}/5</Text>
+    </View>
+  );
+}
+
+const sp = StyleSheet.create({
+  row: { flexDirection: "row", alignItems: "center", gap: 10 },
+  label: { width: 58, fontSize: 13, fontFamily: "Inter_500Medium" },
+  dots: { flex: 1, flexDirection: "row", gap: 6 },
+  dot: {
+    width: 32, height: 32, borderRadius: 8,
+    alignItems: "center", justifyContent: "center",
+  },
+  dotText: { fontSize: 13, fontFamily: "Inter_700Bold" },
+  score: { width: 32, fontSize: 13, fontFamily: "Inter_700Bold", textAlign: "right" },
+});
 
 export default function NewTaskScreen() {
   const colorScheme = useColorScheme();
@@ -42,11 +82,13 @@ export default function NewTaskScreen() {
   const [status, setStatus] = useState<TaskStatus>("todo");
   const [deadlineDate, setDeadlineDate] = useState(addDays(today, 7));
   const [dateInput, setDateInput] = useState(addDays(today, 7));
-
   const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>("none");
   const [recurrenceInterval, setRecurrenceInterval] = useState(1);
   const [recurrenceDayOfWeek, setRecurrenceDayOfWeek] = useState(0);
   const [recurrenceDayOfMonth, setRecurrenceDayOfMonth] = useState(1);
+  const [duration, setDuration] = useState(30);
+  const [effort, setEffort] = useState(3);
+  const [impact, setImpact] = useState(3);
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
   const bottomInset = Platform.OS === "web" ? 34 : insets.bottom;
@@ -61,14 +103,8 @@ export default function NewTaskScreen() {
   ];
 
   const handleSave = async () => {
-    if (!title.trim()) {
-      Alert.alert("Required", "Please enter a task title.");
-      return;
-    }
-    if (!deadlineDate) {
-      Alert.alert("Required", "Please set a deadline.");
-      return;
-    }
+    if (!title.trim()) { Alert.alert("Required", "Please enter a task title."); return; }
+    if (!deadlineDate) { Alert.alert("Required", "Please set a deadline."); return; }
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     addTask({
       title: title.trim(),
@@ -80,6 +116,10 @@ export default function NewTaskScreen() {
       recurrenceInterval,
       recurrenceDayOfWeek,
       recurrenceDayOfMonth,
+      estimated_duration: duration,
+      effort_score: effort,
+      impact_score: impact,
+      subtasks: [],
     });
     router.back();
   };
@@ -90,12 +130,6 @@ export default function NewTaskScreen() {
       const date = new Date(text);
       if (!isNaN(date.getTime())) setDeadlineDate(text);
     }
-  };
-
-  const selectQuickDate = async (value: string) => {
-    await Haptics.selectionAsync();
-    setDeadlineDate(value);
-    setDateInput(value);
   };
 
   return (
@@ -123,13 +157,8 @@ export default function NewTaskScreen() {
             onChangeText={setTitle}
             placeholder="What needs to be done?"
             placeholderTextColor={theme.textSecondary}
-            style={[
-              styles.titleInput,
-              { color: theme.text, borderBottomColor: title ? AppColors.primary : theme.border },
-            ]}
-            autoFocus
-            returnKeyType="next"
-            multiline
+            style={[styles.titleInput, { color: theme.text, borderBottomColor: title ? AppColors.primary : theme.border }]}
+            autoFocus returnKeyType="next" multiline
           />
         </View>
 
@@ -140,16 +169,8 @@ export default function NewTaskScreen() {
             onChangeText={setDescription}
             placeholder="Add details (optional)"
             placeholderTextColor={theme.textSecondary}
-            style={[
-              styles.descInput,
-              {
-                color: theme.text,
-                backgroundColor: theme.bgCard,
-                borderColor: theme.border,
-              },
-            ]}
-            multiline
-            numberOfLines={3}
+            style={[styles.descInput, { color: theme.text, backgroundColor: theme.bgCard, borderColor: theme.border }]}
+            multiline numberOfLines={3}
           />
         </View>
 
@@ -162,17 +183,8 @@ export default function NewTaskScreen() {
               return (
                 <Pressable
                   key={p}
-                  onPress={async () => {
-                    await Haptics.selectionAsync();
-                    setPriority(p);
-                  }}
-                  style={[
-                    styles.option,
-                    {
-                      backgroundColor: isActive ? color + "20" : theme.bgCard,
-                      borderColor: isActive ? color : theme.border,
-                    },
-                  ]}
+                  onPress={async () => { await Haptics.selectionAsync(); setPriority(p); }}
+                  style={[styles.option, { backgroundColor: isActive ? color + "20" : theme.bgCard, borderColor: isActive ? color : theme.border }]}
                 >
                   <View style={[styles.priorityDot, { backgroundColor: color }]} />
                   <Text style={[styles.optionText, { color: isActive ? color : theme.textSecondary }]}>
@@ -193,17 +205,8 @@ export default function NewTaskScreen() {
               return (
                 <Pressable
                   key={s}
-                  onPress={async () => {
-                    await Haptics.selectionAsync();
-                    setStatus(s);
-                  }}
-                  style={[
-                    styles.option,
-                    {
-                      backgroundColor: isActive ? color + "20" : theme.bgCard,
-                      borderColor: isActive ? color : theme.border,
-                    },
-                  ]}
+                  onPress={async () => { await Haptics.selectionAsync(); setStatus(s); }}
+                  style={[styles.option, { backgroundColor: isActive ? color + "20" : theme.bgCard, borderColor: isActive ? color : theme.border }]}
                 >
                   <Text style={[styles.optionText, { color: isActive ? color : theme.textSecondary }]}>
                     {STATUS_LABELS[s]}
@@ -222,24 +225,10 @@ export default function NewTaskScreen() {
               return (
                 <Pressable
                   key={d.label}
-                  onPress={() => selectQuickDate(d.value)}
-                  style={[
-                    styles.quickDate,
-                    {
-                      backgroundColor: isActive ? AppColors.primary + "20" : theme.bgCard,
-                      borderColor: isActive ? AppColors.primary : theme.border,
-                    },
-                  ]}
+                  onPress={async () => { await Haptics.selectionAsync(); setDeadlineDate(d.value); setDateInput(d.value); }}
+                  style={[styles.quickDate, { backgroundColor: isActive ? AppColors.primary + "20" : theme.bgCard, borderColor: isActive ? AppColors.primary : theme.border }]}
                 >
-                  <Text
-                    style={[
-                      styles.quickDateText,
-                      {
-                        color: isActive ? AppColors.primary : theme.textSecondary,
-                        fontFamily: isActive ? "Inter_600SemiBold" : "Inter_400Regular",
-                      },
-                    ]}
-                  >
+                  <Text style={[styles.quickDateText, { color: isActive ? AppColors.primary : theme.textSecondary, fontFamily: isActive ? "Inter_600SemiBold" : "Inter_400Regular" }]}>
                     {d.label}
                   </Text>
                 </Pressable>
@@ -263,6 +252,38 @@ export default function NewTaskScreen() {
         </View>
 
         <View style={styles.formSection}>
+          <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>ESTIMATED DURATION</Text>
+          <View style={styles.quickDates}>
+            {DURATION_OPTIONS.map((d) => {
+              const isActive = duration === d.value;
+              return (
+                <Pressable
+                  key={d.value}
+                  onPress={async () => { await Haptics.selectionAsync(); setDuration(d.value); }}
+                  style={[styles.quickDate, { backgroundColor: isActive ? AppColors.primary + "20" : theme.bgCard, borderColor: isActive ? AppColors.primary : theme.border }]}
+                >
+                  <Text style={[styles.quickDateText, { color: isActive ? AppColors.primary : theme.textSecondary, fontFamily: isActive ? "Inter_600SemiBold" : "Inter_400Regular" }]}>
+                    {d.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={[styles.formSection, styles.scoreCard, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
+          <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>EFFORT & IMPACT</Text>
+          <ScorePicker label="Effort" value={effort} onChange={setEffort} activeColor="#EF4444" theme={theme} />
+          <ScorePicker label="Impact" value={impact} onChange={setImpact} activeColor="#22C55E" theme={theme} />
+          <View style={[styles.scoreHint, { borderTopColor: theme.border }]}>
+            <Ionicons name="flash-outline" size={13} color={AppColors.primary} />
+            <Text style={[styles.scoreHintText, { color: theme.textSecondary }]}>
+              Priority score: {((impact / Math.max(1, effort)) + 5).toFixed(1)} · High impact + low effort = top priority
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.formSection}>
           <RecurrenceSection
             recurrenceType={recurrenceType}
             recurrenceInterval={recurrenceInterval}
@@ -279,10 +300,7 @@ export default function NewTaskScreen() {
 
         <Pressable
           onPress={handleSave}
-          style={({ pressed }) => [
-            styles.submitBtn,
-            { opacity: pressed ? 0.85 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] },
-          ]}
+          style={({ pressed }) => [styles.submitBtn, { opacity: pressed ? 0.85 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] }]}
         >
           <Ionicons name="checkmark" size={20} color="#fff" />
           <Text style={styles.submitBtnText}>Create Task</Text>
@@ -295,137 +313,39 @@ export default function NewTaskScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingBottom: 16,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingHorizontal: 20, paddingBottom: 16,
   },
-  closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontFamily: "Inter_600SemiBold",
-  },
-  saveBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 7,
-    backgroundColor: AppColors.primary,
-    borderRadius: 10,
-  },
-  saveBtnText: {
-    color: "#fff",
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 14,
-  },
-  scroll: {
-    paddingHorizontal: 20,
-    gap: 24,
-  },
-  formSection: {
-    gap: 10,
-  },
-  sectionLabel: {
-    fontSize: 11,
-    fontFamily: "Inter_700Bold",
-    letterSpacing: 1,
-  },
-  titleInput: {
-    fontSize: 22,
-    fontFamily: "Inter_700Bold",
-    borderBottomWidth: 2,
-    paddingBottom: 8,
-    minHeight: 44,
-  },
+  closeBtn: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  headerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
+  saveBtn: { paddingHorizontal: 16, paddingVertical: 7, backgroundColor: AppColors.primary, borderRadius: 10 },
+  saveBtnText: { color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 14 },
+  scroll: { paddingHorizontal: 20, gap: 24 },
+  formSection: { gap: 10 },
+  sectionLabel: { fontSize: 11, fontFamily: "Inter_700Bold", letterSpacing: 1 },
+  titleInput: { fontSize: 22, fontFamily: "Inter_700Bold", borderBottomWidth: 2, paddingBottom: 8, minHeight: 44 },
   descInput: {
-    fontSize: 15,
-    fontFamily: "Inter_400Regular",
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 12,
-    minHeight: 80,
-    textAlignVertical: "top",
-    lineHeight: 22,
+    fontSize: 15, fontFamily: "Inter_400Regular", borderWidth: 1,
+    borderRadius: 12, padding: 12, minHeight: 80, textAlignVertical: "top", lineHeight: 22,
   },
-  optionsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  option: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1.5,
-  },
-  priorityDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  optionText: {
-    fontSize: 13,
-    fontFamily: "Inter_500Medium",
-  },
-  quickDates: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  quickDate: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  quickDateText: {
-    fontSize: 13,
-  },
-  dateInputRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  dateTextInput: {
-    flex: 1,
-    fontSize: 15,
-    fontFamily: "Inter_400Regular",
-  },
-  dateHint: {
-    fontSize: 11,
-    fontFamily: "Inter_400Regular",
-    marginTop: -4,
-  },
+  optionsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  option: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, borderWidth: 1.5 },
+  priorityDot: { width: 8, height: 8, borderRadius: 4 },
+  optionText: { fontSize: 13, fontFamily: "Inter_500Medium" },
+  quickDates: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  quickDate: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },
+  quickDateText: { fontSize: 13 },
+  dateInputRow: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12 },
+  dateTextInput: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular" },
+  dateHint: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: -4 },
+  scoreCard: { borderWidth: 1, borderRadius: 14, padding: 16, gap: 14 },
+  scoreHint: { flexDirection: "row", alignItems: "center", gap: 6, paddingTop: 12, borderTopWidth: 1, marginTop: 2 },
+  scoreHintText: { fontSize: 11, fontFamily: "Inter_400Regular", flex: 1, lineHeight: 16 },
   submitBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    backgroundColor: AppColors.primary,
-    borderRadius: 14,
-    paddingVertical: 16,
-    marginTop: 8,
-    shadowColor: AppColors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 6,
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 8, backgroundColor: AppColors.primary, borderRadius: 14, paddingVertical: 16,
+    marginTop: 8, shadowColor: AppColors.primary,
+    shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 12, elevation: 6,
   },
-  submitBtnText: {
-    color: "#fff",
-    fontSize: 16,
-    fontFamily: "Inter_600SemiBold",
-  },
+  submitBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
 });

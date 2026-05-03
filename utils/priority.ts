@@ -2,6 +2,12 @@ export type PriorityLevel = "low" | "medium" | "high" | "top" | "critical";
 export type TaskStatus = "todo" | "inprogress" | "done";
 export type RecurrenceType = "none" | "daily" | "weekly" | "monthly" | "custom";
 
+export interface Subtask {
+  id: string;
+  title: string;
+  completed: boolean;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -11,12 +17,17 @@ export interface Task {
   manualPriority: PriorityLevel;
   dynamicPriority: PriorityLevel;
   urgencyScore: number;
+  priority_score: number;
   status: TaskStatus;
   recurrenceType: RecurrenceType;
   recurrenceInterval?: number;
   recurrenceDayOfWeek?: number;
   recurrenceDayOfMonth?: number;
   nextCycleStart?: string;
+  estimated_duration: number;
+  effort_score: number;
+  impact_score: number;
+  subtasks: Subtask[];
 }
 
 export const PRIORITY_WEIGHT: Record<PriorityLevel, number> = {
@@ -38,13 +49,11 @@ function escalatePriority(base: PriorityLevel, levels: number): PriorityLevel {
 export function getDaysRemaining(deadlineDate: string): number {
   const now = new Date();
   const deadline = new Date(deadlineDate);
-  const diffMs = deadline.getTime() - now.getTime();
-  return diffMs / (1000 * 60 * 60 * 24);
+  return (deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
 }
 
 export function calculateDynamicPriority(task: Pick<Task, "manualPriority" | "deadlineDate">): PriorityLevel {
   const days = getDaysRemaining(task.deadlineDate);
-
   if (days < 0) return "critical";
   if (days <= 1) return "top";
   if (days <= 2) return escalatePriority(task.manualPriority, 2);
@@ -54,34 +63,42 @@ export function calculateDynamicPriority(task: Pick<Task, "manualPriority" | "de
 
 export function calculateUrgencyScore(task: Pick<Task, "manualPriority" | "deadlineDate" | "dynamicPriority">): number {
   const days = getDaysRemaining(task.deadlineDate);
-  const priorityWeight = 0.6;
-  const deadlineWeight = 0.4;
-
   const manualScore = PRIORITY_WEIGHT[task.manualPriority];
   const dynamicScore = PRIORITY_WEIGHT[task.dynamicPriority];
-
   const daysInverse = days <= 0 ? 10 : Math.max(0, 10 - Math.min(days, 10));
+  return (0.6 * ((manualScore + dynamicScore) / 2) * 5) + (0.4 * daysInverse);
+}
 
-  return (priorityWeight * ((manualScore + dynamicScore) / 2) * 5) + (deadlineWeight * daysInverse);
+export function calculatePriorityScore(urgencyScore: number, effort_score: number, impact_score: number): number {
+  const safe_effort = Math.max(1, effort_score);
+  return (impact_score / safe_effort) + urgencyScore;
 }
 
 export function refreshTaskPriorities(tasks: Task[]): Task[] {
   return tasks.map((task) => {
     const migratedTask: Task = {
+      estimated_duration: 30,
+      effort_score: 3,
+      impact_score: 3,
+      subtasks: [],
+      recurrenceType: "none",
+      priority_score: 0,
       ...task,
-      recurrenceType: task.recurrenceType ?? "none",
     };
-    if (migratedTask.status === "done") return migratedTask;
+    if (migratedTask.status === "done") {
+      return {
+        ...migratedTask,
+        priority_score: calculatePriorityScore(
+          migratedTask.urgencyScore,
+          migratedTask.effort_score,
+          migratedTask.impact_score
+        ),
+      };
+    }
     const dynamicPriority = calculateDynamicPriority(migratedTask);
     const urgencyScore = calculateUrgencyScore({ ...migratedTask, dynamicPriority });
-    return { ...migratedTask, dynamicPriority, urgencyScore };
-  });
-}
-
-export function sortTasksByUrgency(tasks: Task[]): Task[] {
-  return [...tasks].sort((a, b) => {
-    if (b.urgencyScore !== a.urgencyScore) return b.urgencyScore - a.urgencyScore;
-    return getDaysRemaining(a.deadlineDate) - getDaysRemaining(b.deadlineDate);
+    const priority_score = calculatePriorityScore(urgencyScore, migratedTask.effort_score, migratedTask.impact_score);
+    return { ...migratedTask, dynamicPriority, urgencyScore, priority_score };
   });
 }
 
@@ -100,36 +117,39 @@ export function formatDaysRemaining(deadlineDate: string): string {
     return hours <= 0 ? "Due now" : `${hours}h left`;
   }
   const daysInt = Math.floor(days);
-  if (daysInt === 0) return "Due today";
   if (daysInt === 1) return "1 day left";
   return `${daysInt} days left`;
 }
 
 export function formatDeadline(deadlineDate: string): string {
-  const date = new Date(deadlineDate);
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return new Date(deadlineDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+export function formatDuration(minutes: number): string {
+  if (minutes < 60) return `${minutes}m`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
+export function minutesToTimeString(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  const ampm = h >= 12 ? "PM" : "AM";
+  const h12 = h % 12 || 12;
+  return `${h12}:${m.toString().padStart(2, "0")} ${ampm}`;
 }
 
 export const PRIORITY_LABELS: Record<PriorityLevel, string> = {
-  low: "Low",
-  medium: "Medium",
-  high: "High",
-  top: "Top",
-  critical: "Critical",
+  low: "Low", medium: "Medium", high: "High", top: "Top", critical: "Critical",
 };
 
 export const STATUS_LABELS: Record<TaskStatus, string> = {
-  todo: "To Do",
-  inprogress: "In Progress",
-  done: "Done",
+  todo: "To Do", inprogress: "In Progress", done: "Done",
 };
 
 export const RECURRENCE_LABELS: Record<RecurrenceType, string> = {
-  none: "No repeat",
-  daily: "Daily",
-  weekly: "Weekly",
-  monthly: "Monthly",
-  custom: "Custom",
+  none: "No repeat", daily: "Daily", weekly: "Weekly", monthly: "Monthly", custom: "Custom",
 };
 
 export const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -138,16 +158,13 @@ export const DAY_NAMES_FULL = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thur
 export function computeNextDeadline(task: Task): string {
   const base = new Date();
   base.setHours(12, 0, 0, 0);
-
   switch (task.recurrenceType) {
-    case "daily": {
+    case "daily":
       base.setDate(base.getDate() + 1);
       return base.toISOString();
-    }
     case "weekly": {
       const targetDay = task.recurrenceDayOfWeek ?? 0;
-      const today = base.getDay();
-      let daysUntil = (targetDay - today + 7) % 7;
+      let daysUntil = (targetDay - base.getDay() + 7) % 7;
       if (daysUntil === 0) daysUntil = 7;
       base.setDate(base.getDate() + daysUntil);
       return base.toISOString();
@@ -161,8 +178,7 @@ export function computeNextDeadline(task: Task): string {
       return next.toISOString();
     }
     case "custom": {
-      const interval = task.recurrenceInterval ?? 1;
-      base.setDate(base.getDate() + interval);
+      base.setDate(base.getDate() + (task.recurrenceInterval ?? 1));
       return base.toISOString();
     }
     default:
@@ -183,10 +199,7 @@ export function describeRecurrence(task: Task): string {
 function ordinal(n: number): string {
   if (n >= 11 && n <= 13) return "th";
   switch (n % 10) {
-    case 1: return "st";
-    case 2: return "nd";
-    case 3: return "rd";
-    default: return "th";
+    case 1: return "st"; case 2: return "nd"; case 3: return "rd"; default: return "th";
   }
 }
 
