@@ -160,6 +160,7 @@ function serveLandingPage({
 
 function isMetroRequest(req: Request): boolean {
   const p = req.path;
+  if (p === "/status" || p === "/symbolicate" || p === "/open-stack-frame") return true;
   if (p.endsWith(".bundle") || p.endsWith(".map")) return true;
   if (p.startsWith("/__metro") || p.startsWith("/debugger-ui")) return true;
   if (p.startsWith("/node_modules/")) return true;
@@ -199,7 +200,7 @@ function configureExpoAndLanding(app: express.Application) {
   });
 
   app.use((req: Request, res: Response, next: NextFunction) => {
-    if (req.path.startsWith("/api") || req.path.startsWith("/status")) {
+    if (req.path.startsWith("/api")) {
       return next();
     }
 
