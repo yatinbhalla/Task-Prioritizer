@@ -3,7 +3,7 @@ import type { Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import * as fs from "fs";
 import * as path from "path";
-import * as http from "http";
+import { createProxyMiddleware } from "http-proxy-middleware";
 
 const app = express();
 const log = console.log;
@@ -109,7 +109,7 @@ function getAppName(): string {
   }
 }
 
-function serveExpoManifest(platform: string, req: Request, res: Response) {
+function serveExpoManifest(platform: string, _req: Request, res: Response) {
   const manifestPath = path.resolve(
     process.cwd(),
     "static-build",
@@ -117,42 +117,15 @@ function serveExpoManifest(platform: string, req: Request, res: Response) {
     "manifest.json",
   );
 
-  if (fs.existsSync(manifestPath)) {
-    res.setHeader("expo-protocol-version", "1");
-    res.setHeader("expo-sfv-version", "0");
-    res.setHeader("content-type", "application/json");
-    const manifest = fs.readFileSync(manifestPath, "utf-8");
-    res.send(manifest);
-    return;
+  if (!fs.existsSync(manifestPath)) {
+    return res.status(404).json({ error: `Manifest not found for platform: ${platform}` });
   }
 
-  // In development, proxy the manifest request to the Metro bundler on port 8081
-  const proxyReq = http.request(
-    {
-      hostname: "localhost",
-      port: 8081,
-      path: req.url || "/",
-      method: req.method || "GET",
-      headers: {
-        ...req.headers,
-        host: "localhost:8081",
-      },
-    },
-    (proxyRes) => {
-      Object.entries(proxyRes.headers).forEach(([key, value]) => {
-        if (value !== undefined) res.setHeader(key, value);
-      });
-      res.status(proxyRes.statusCode || 200);
-      proxyRes.pipe(res);
-    },
-  );
-
-  proxyReq.on("error", () => {
-    log(`Metro proxy error: Metro not ready on port 8081`);
-    res.status(503).json({ error: "Metro bundler not available. Start the frontend workflow." });
-  });
-
-  proxyReq.end();
+  res.setHeader("expo-protocol-version", "1");
+  res.setHeader("expo-sfv-version", "0");
+  res.setHeader("content-type", "application/json");
+  const manifest = fs.readFileSync(manifestPath, "utf-8");
+  res.send(manifest);
 }
 
 function serveLandingPage({
@@ -185,41 +158,12 @@ function serveLandingPage({
   res.status(200).send(html);
 }
 
-function proxyToMetro(req: Request, res: Response) {
-  const proxyReq = http.request(
-    {
-      hostname: "localhost",
-      port: 8081,
-      path: req.url || "/",
-      method: req.method || "GET",
-      headers: {
-        ...req.headers,
-        host: "localhost:8081",
-      },
-    },
-    (proxyRes) => {
-      Object.entries(proxyRes.headers).forEach(([key, value]) => {
-        if (value !== undefined) res.setHeader(key, value);
-      });
-      res.status(proxyRes.statusCode || 200);
-      proxyRes.pipe(res);
-    },
-  );
-
-  proxyReq.on("error", () => {
-    res.status(503).json({ error: "Metro bundler not available." });
-  });
-
-  proxyReq.end();
-}
-
 function isMetroRequest(req: Request): boolean {
   const p = req.path;
-  // Bundle files, source maps, Metro internal paths, hot reload
   if (p.endsWith(".bundle") || p.endsWith(".map")) return true;
   if (p.startsWith("/__metro") || p.startsWith("/debugger-ui")) return true;
   if (p.startsWith("/node_modules/")) return true;
-  // Expo platform header signals a native client
+  if (p.startsWith("/expo-router/") || p.startsWith("/@expo/")) return true;
   const platform = req.header("expo-platform");
   if (platform === "ios" || platform === "android") return true;
   return false;
@@ -239,17 +183,31 @@ function configureExpoAndLanding(app: express.Application) {
 
   log(`Expo routing: ${isDev ? "dev (proxying to Metro on :8081)" : "production (serving static-build)"}`);
 
+  // In development, use http-proxy-middleware to forward Metro traffic
+  const metroProxy = createProxyMiddleware({
+    target: "http://localhost:8081",
+    changeOrigin: true,
+    ws: true,
+    on: {
+      error: (err, req, res) => {
+        log(`Metro proxy error: ${(err as Error).message}`);
+        if (!("headersSent" in res && res.headersSent)) {
+          (res as Response).status(503).json({ error: "Metro bundler not available." });
+        }
+      },
+    },
+  });
+
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (req.path.startsWith("/api") || req.path.startsWith("/status")) {
       return next();
     }
 
-    // In development, forward all Metro-related requests to the Metro bundler
     if (isDev && isMetroRequest(req)) {
-      return proxyToMetro(req, res);
+      log(`[Metro proxy] ${req.method} ${req.path}`);
+      return metroProxy(req, res, next);
     }
 
-    // Manifest request (with expo-platform header) — serve static or proxy to Metro
     if ((req.path === "/" || req.path === "/manifest") && !isDev) {
       const platform = req.header("expo-platform");
       if (platform === "ios" || platform === "android") {
@@ -291,6 +249,34 @@ function setupErrorHandler(app: express.Application) {
   });
 }
 
+const BUNDLE_PARAMS =
+  "dev=true&hot=false&lazy=true&transform.engine=hermes&transform.bytecode=1" +
+  "&transform.routerRoot=app&transform.reactCompiler=true&unstable_transformProfile=hermes-stable";
+const BUNDLE_ENTRY = "node_modules/expo-router/entry.bundle";
+
+async function prewarmBundle(platform: "android" | "ios") {
+  const url = `http://localhost:8081/${BUNDLE_ENTRY}?platform=${platform}&${BUNDLE_PARAMS}`;
+  try {
+    log(`[Prewarm] Compiling ${platform} bundle…`);
+    const res = await fetch(url);
+    if (res.ok) {
+      await res.arrayBuffer(); // fully consume so Metro caches it
+      log(`[Prewarm] ${platform} bundle ready`);
+    } else {
+      log(`[Prewarm] ${platform} bundle returned ${res.status}`);
+    }
+  } catch (e) {
+    log(`[Prewarm] ${platform} bundle failed: ${(e as Error).message}`);
+  }
+}
+
+async function prewarmInBackground() {
+  // Give Metro time to start before hitting it
+  await new Promise((r) => setTimeout(r, 8000));
+  await prewarmBundle("android");
+  await prewarmBundle("ios");
+}
+
 (async () => {
   setupCors(app);
   setupBodyParsing(app);
@@ -311,6 +297,7 @@ function setupErrorHandler(app: express.Application) {
     },
     () => {
       log(`express server serving on port ${port}`);
+      prewarmInBackground();
     },
   );
 })();
