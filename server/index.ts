@@ -160,11 +160,18 @@ function serveLandingPage({
 
 function isMetroRequest(req: Request): boolean {
   const p = req.path;
+  // Metro health/debug endpoints
   if (p === "/status" || p === "/symbolicate" || p === "/open-stack-frame") return true;
+  // Bundle and source map files
   if (p.endsWith(".bundle") || p.endsWith(".map")) return true;
+  // Metro internal UI
   if (p.startsWith("/__metro") || p.startsWith("/debugger-ui")) return true;
+  // JS module paths
   if (p.startsWith("/node_modules/")) return true;
   if (p.startsWith("/expo-router/") || p.startsWith("/@expo/")) return true;
+  // Metro asset server: /assets/?unstable_path=... or /assets/... with query params
+  if (p.startsWith("/assets/") && req.query["unstable_path"]) return true;
+  // Any request with expo-platform header is from a native client
   const platform = req.header("expo-platform");
   if (platform === "ios" || platform === "android") return true;
   return false;
